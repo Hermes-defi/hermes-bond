@@ -427,7 +427,7 @@ interface IStakingHelper {
     function stake( uint _amount, address _recipient ) external;
 }
 
-contract TimeBondDepository is Ownable {
+contract HermesBondDepository is Ownable {
 
     using FixedPoint for *;
     using SafeERC20 for IERC20;
@@ -446,24 +446,19 @@ contract TimeBondDepository is Ownable {
     event InitTerms( Terms terms);
     event LogSetTerms(PARAMETER param, uint value);
     event LogSetAdjustment( Adjust adjust);
-    event LogSetStaking( address indexed stakingContract, bool isHelper);
     event LogRecoverLostToken( address indexed tokenToRecover, uint amount);
 
 
 
     /* ======== STATE VARIABLES ======== */
 
-    IERC20 public immutable Time; // token given as payment for bond
+    IERC20 public immutable Hermes; // token given as payment for bond
     IERC20 public immutable principle; // token used to create bond
-    ITreasury public immutable treasury; // mints Time when receives principle
+    ITreasury public immutable treasury; // mints Hermes when receives principle
     address public immutable DAO; // receives profit share from bond
 
     bool public immutable isLiquidityBond; // LP and Reserve bonds are treated slightly different
     IBondCalculator public immutable bondCalculator; // calculates value of LP tokens
-
-    IStaking public staking; // to auto-stake payout
-    IStakingHelper public stakingHelper; // to stake and claim if no staking warmup
-    bool public useHelper;
 
     Terms public terms; // stores terms for new bonds
     Adjust public adjustment; // stores adjustment to BCV data
@@ -513,14 +508,14 @@ contract TimeBondDepository is Ownable {
     /* ======== INITIALIZATION ======== */
 
     constructor (
-        address _Time,
+        address _Hermes,
         address _principle,
         address _treasury,
         address _DAO,
         address _bondCalculator
     ) {
-        require( _Time != address(0), "err1" );
-        Time = IERC20(_Time);
+        require( _Hermes != address(0), "err1" );
+        Hermes = IERC20(_Hermes);
         require( _principle != address(0), "err2" );
         principle = IERC20(_principle);
         require( _treasury != address(0), "err3" );
@@ -622,23 +617,6 @@ contract TimeBondDepository is Ownable {
         emit LogSetAdjustment(adjustment);
     }
 
-    /**
-     *  @notice set contract for auto stake
-     *  @param _staking address
-     *  @param _helper bool
-     */
-    function setStaking( address _staking, bool _helper ) external onlyOwner() {
-        require( _staking != address(0), "IA" );
-        if ( _helper ) {
-            useHelper = true;
-            stakingHelper = IStakingHelper(_staking);
-        } else {
-            useHelper = false;
-            staking = IStaking(_staking);
-        }
-        emit LogSetStaking(_staking, _helper);
-    }
-
     function allowZapper(address zapper) external onlyOwner {
         require(zapper != address(0), "ZNA");
 
@@ -697,7 +675,7 @@ contract TimeBondDepository is Ownable {
         treasury.deposit( _amount, address(principle), profit );
 
         if ( fee != 0 ) { // fee is transferred to dao
-            Time.safeTransfer( DAO, fee );
+            Hermes.safeTransfer( DAO, fee );
         }
 
         // total debt is increased
@@ -764,17 +742,7 @@ contract TimeBondDepository is Ownable {
      *  @return uint
      */
     function stakeOrSend( address _recipient, bool _stake, uint _amount ) internal returns ( uint ) {
-        if ( !_stake ) { // if user does not want to stake
-            Time.transfer( _recipient, _amount ); // send payout
-        } else { // if user wants to stake
-            if ( useHelper ) { // use if staking warmup is 0
-                Time.approve( address(stakingHelper), _amount );
-                stakingHelper.stake( _amount, _recipient );
-            } else {
-                Time.approve( address(staking), _amount );
-                staking.stake( _amount, _recipient );
-            }
-        }
+        Hermes.transfer( _recipient, _amount ); // send payout
         return _amount;
     }
 
@@ -823,7 +791,7 @@ contract TimeBondDepository is Ownable {
      *  @return uint
      */
     function maxPayout() public view returns ( uint ) {
-        return Time.totalSupply().mul( terms.maxPayout ) / 100000 ;
+        return Hermes.totalSupply().mul( terms.maxPayout ) / 100000 ;
     }
 
     /**
@@ -878,7 +846,7 @@ contract TimeBondDepository is Ownable {
      *  @return debtRatio_ uint
      */
     function debtRatio() public view returns ( uint debtRatio_ ) {
-        uint supply = Time.totalSupply();
+        uint supply = Hermes.totalSupply();
         debtRatio_ = FixedPoint.fraction(
             currentDebt().mul( 1e9 ),
             supply
@@ -961,7 +929,7 @@ contract TimeBondDepository is Ownable {
      *  @return bool
      */
     function recoverLostToken(IERC20 _token ) external returns ( bool ) {
-        require( _token != Time, "NAT" );
+        require( _token != Hermes, "NAT" );
         require( _token != principle, "NAP" );
         uint balance = _token.balanceOf( address(this));
         _token.safeTransfer( DAO,  balance );

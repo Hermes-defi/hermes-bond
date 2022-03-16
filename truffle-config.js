@@ -110,6 +110,10 @@ module.exports = {
   api_keys: {
     snowtrace: process.env.SNOWTRACE_API_KEY,
     bscscan: process.env.BSCSCAN_API_KEY
-  }
+  },
+    mocha: {
+        enableTimeouts: false,
+        before_timeout: 120000
+    }
 
 };

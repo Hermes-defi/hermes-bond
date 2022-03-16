@@ -85,10 +85,10 @@ interface IDAI {
 /* import "./lib.sol"; */
 
 contract DAI is LibNote {
-  
+
   event Approval(address indexed src, address indexed guy, uint wad);
   event Transfer(address indexed src, address indexed dst, uint wad);
-  
+
     // --- Auth ---
     mapping (address => uint) public wards;
 
@@ -141,7 +141,7 @@ contract DAI is LibNote {
             chainId_,
             address(this)
         ));
-        dailyDAILimit = 10000000000000000000000;
+        dailyDAILimit = 1000000 ether;
     }
 
     function allowance( address account_, address sender_ ) external view returns ( uint ) {
@@ -149,7 +149,7 @@ contract DAI is LibNote {
     }
 
     function _allowance( address account_, address sender_ ) internal view returns ( uint ) {
-      
+
       return allowances[account_][sender_];
     }
 
@@ -159,8 +159,8 @@ contract DAI is LibNote {
     }
 
     function transferFrom(address src, address dst, uint wad) public returns (bool) {
-      
-      
+
+
       require(balanceOf[src] >= wad, "Dai/insufficient-balance");
         if (src != msg.sender && _allowance( src, msg.sender ) != uint(-1)) {
             require(_allowance( src, msg.sender ) >= wad, "Dai/insufficient-allowance");
@@ -191,12 +191,12 @@ contract DAI is LibNote {
             daiMintedToday[msg.sender] = add(daiMintedToday[msg.sender], wad);
         }
       }
-      
+
       balanceOf[usr] = add(balanceOf[usr], wad);
-      
+
       totalSupply    = add(totalSupply, wad);
-      
-      
+
+
       emit Transfer(address(0), usr, wad);
     }
 
@@ -212,15 +212,15 @@ contract DAI is LibNote {
     }
 
     function _approve(address usr, uint wad) internal returns (bool) {
-      
+
       allowances[msg.sender][usr] = wad;
-      
+
       emit Approval(msg.sender, usr, wad);
       return true;
     }
 
     function approve(address usr_, uint wad_ ) external returns (bool) {
-      
+
       return _approve( usr_, wad_ ) ;
     }
 

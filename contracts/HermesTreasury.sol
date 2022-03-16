@@ -238,7 +238,7 @@ interface IBondCalculator {
   function valuation( address pair_, uint amount_ ) external view returns ( uint _value );
 }
 
-contract TimeTreasury is Ownable {
+contract HermesTreasury is Ownable {
 
     using LowGasSafeMath for uint;
     using LowGasSafeMath for uint32;
@@ -328,7 +328,7 @@ contract TimeTreasury is Ownable {
         uint32 _secondsNeededForQueue,
         uint256 _limitAmount
     ) {
-        require( _Time != address(0) );
+        require( _Time != address(0), "err1" );
         Time = ITIMEERC20(_Time);
 
         isReserveToken[ _MIM ] = true;
@@ -354,13 +354,14 @@ contract TimeTreasury is Ownable {
         @return send_ uint
      */
     function deposit( uint _amount, address _token, uint _profit ) external returns ( uint send_ ) {
-        require( isReserveToken[ _token ] || isLiquidityToken[ _token ], "Not accepted" );
+        require( isReserveToken[ _token ] || isLiquidityToken[ _token ], "not reserve o liquidity token" );
+
         IERC20( _token ).safeTransferFrom( msg.sender, address(this), _amount );
 
         if ( isReserveToken[ _token ] ) {
-            require( isReserveDepositor[ msg.sender ], "Not approved" );
+            require( isReserveDepositor[ msg.sender ], "err 1) Not approved" );
         } else {
-            require( isLiquidityDepositor[ msg.sender ], "Not approved" );
+            require( isLiquidityDepositor[ msg.sender ], "err 2) Not approved" );
         }
 
         uint value = valueOf(_token, _amount);
@@ -611,6 +612,7 @@ contract TimeTreasury is Ownable {
             isReserveSpender[ _address ] = result;
 
         } else if ( _managing == MANAGING.RESERVETOKEN ) { // 2
+            IERC20( _address ).balanceOf(address(this));
             if ( requirements( reserveTokenQueue, isReserveToken, _address ) ) {
                 reserveTokenQueue[ _address ] = 0;
                 if( !listContains( reserveTokens, _address ) && !listContains( liquidityTokens, _address ) ) {

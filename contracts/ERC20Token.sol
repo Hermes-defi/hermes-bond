@@ -390,7 +390,7 @@ contract ERC20Token is ERC20Permit, VaultOwned {
 
     using LowGasSafeMath for uint256;
 
-    constructor() ERC20("Hermes Bond", "bHermes", 9) {
+    constructor() ERC20("Test Token", "TSTv1", 9) {
 
     }
 
