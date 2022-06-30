@@ -709,19 +709,17 @@ contract HermesBondDepository is Ownable {
         uint profit = value.sub( payout ).sub( fee );
 
         /**
-            principle is transferred in
-            approved and
-            deposited into the treasury, returning (_amount - profit) Time
-         */
-
-        // prevent deflationary attack
+            principle is transferred in approved and deposited into the treasury, returning (_amount - profit) Time                
+            prevent deflationary attack
+        */
         
-
-        uint balanceBefore = principle.balanceOf(address(this));
+        /*uint balanceBefore = principle.balanceOf(address(this));
         principle.safeTransferFrom( msg.sender, address(this), _amount );
         uint balanceAfter = principle.balanceOf(address(this));
         uint totalDeposited = balanceAfter.sub(balanceBefore);
-        require( totalDeposited == _amount, "invalid amount transferred");
+        require( totalDeposited == _amount, "invalid amount transferred");*/
+
+        principle.safeTransferFrom( msg.sender, address(this), _amount );
 
         
         principle.approve( address( treasury ), _amount );
