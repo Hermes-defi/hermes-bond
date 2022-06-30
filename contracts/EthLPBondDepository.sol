@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.7.5;
 
+
 interface IOwnable {
   function policy() external view returns (address);
 
@@ -57,11 +58,11 @@ library LowGasSafeMath {
     /// @param y The addend
     /// @return z The sum of x and y
     function add(uint256 x, uint256 y) internal pure returns (uint256 z) {
-        require((z = x + y) >= x);
+        require((z = x + y) >= x, "reverts if overflows or underflows");
     }
 
     function add32(uint32 x, uint32 y) internal pure returns (uint32 z) {
-        require((z = x + y) >= x);
+        require((z = x + y) >= x, "reverts if overflows or underflows");
     }
 
     /// @notice Returns x - y, reverts if underflows
@@ -69,11 +70,11 @@ library LowGasSafeMath {
     /// @param y The subtrahend
     /// @return z The difference of x and y
     function sub(uint256 x, uint256 y) internal pure returns (uint256 z) {
-        require((z = x - y) <= x);
+        require((z = x - y) <= x, "reverts if overflows or underflows");
     }
 
     function sub32(uint32 x, uint32 y) internal pure returns (uint32 z) {
-        require((z = x - y) <= x);
+        require((z = x - y) <= x, "reverts if overflows or underflows");
     }
 
     /// @notice Returns x * y, reverts if overflows
@@ -81,7 +82,7 @@ library LowGasSafeMath {
     /// @param y The multiplier
     /// @return z The product of x and y
     function mul(uint256 x, uint256 y) internal pure returns (uint256 z) {
-        require(x == 0 || (z = x * y) / x == y);
+        require(x == 0 || (z = x * y) / x == y, "reverts if overflows or underflows");
     }
 
     /// @notice Returns x + y, reverts if overflows or underflows
@@ -89,7 +90,7 @@ library LowGasSafeMath {
     /// @param y The addend
     /// @return z The sum of x and y
     function add(int256 x, int256 y) internal pure returns (int256 z) {
-        require((z = x + y) >= x == (y >= 0));
+        require((z = x + y) >= x == (y >= 0), "reverts if overflows or underflows");
     }
 
     /// @notice Returns x - y, reverts if overflows or underflows
@@ -97,7 +98,7 @@ library LowGasSafeMath {
     /// @param y The subtrahend
     /// @return z The difference of x and y
     function sub(int256 x, int256 y) internal pure returns (int256 z) {
-        require((z = x - y) <= x == (y >= 0));
+        require((z = x - y) <= x == (y >= 0), "reverts if overflows or underflows");
     }
 }
 
@@ -459,7 +460,13 @@ contract ETHLPBondDepository is Ownable {
     event BondPriceChanged( uint indexed priceInUSD, uint indexed internalPrice, uint indexed debtRatio );
     event ControlVariableAdjustment( uint initialBCV, uint newBCV, uint adjustment, bool addition );
 
-
+    event LogInitializeBondTerms( uint _controlVariable, uint _minimumPrice, uint _maxPayout, uint _maxDebt, uint32 indexed _vestingTerm );
+    event LogSetBondTerms( PARAMETER indexed _parameter, uint indexed _input );
+    event LogSetAdjustment( bool indexed _addition, uint indexed _increment, uint indexed _target, uint32 _buffer );
+    event LogSetStaking( address indexed _staking, bool indexed _helper );
+    event LogAllowZapper( address indexed zapper );
+    event LogRemoveZapper( address indexed zapper );
+    event LogStakeOrSend( address indexed _recipient, bool indexed _stake, uint indexed _amount );
 
 
     /* ======== STATE VARIABLES ======== */
@@ -568,7 +575,10 @@ contract ETHLPBondDepository is Ownable {
             maxPayout: _maxPayout,
             maxDebt: _maxDebt
         });
+
         lastDecay = uint32(block.timestamp);
+
+        emit LogInitializeBondTerms(_controlVariable, _minimumPrice,  _maxPayout, _maxDebt, _vestingTerm);
     }
 
 
@@ -583,6 +593,9 @@ contract ETHLPBondDepository is Ownable {
      *  @param _input uint
      */
     function setBondTerms ( PARAMETER _parameter, uint _input ) external onlyPolicy() {
+
+        require(_input < type(uint32).max, "Avoid _input overflow");
+
         if ( _parameter == PARAMETER.VESTING ) { // 0
             require( _input >= 129600, "Vesting must be longer than 36 hours" );
             decayDebt();
@@ -596,6 +609,9 @@ contract ETHLPBondDepository is Ownable {
         } else if ( _parameter == PARAMETER.MINPRICE ) { // 3
             terms.minimumPrice = _input;
         }
+
+
+        emit LogSetBondTerms(_parameter, _input);
     }
 
     /**
@@ -620,6 +636,8 @@ contract ETHLPBondDepository is Ownable {
             buffer: _buffer,
             lastTime: uint32(block.timestamp)
         });
+
+        emit LogSetAdjustment( _addition, _increment, _target, _buffer );
     }
 
     /**
@@ -636,17 +654,23 @@ contract ETHLPBondDepository is Ownable {
             useHelper = false;
             staking = IStaking(_staking);
         }
+
+        emit LogSetStaking( _staking, _helper );
     }
 
     function allowZapper(address zapper) external onlyPolicy {
         require(zapper != address(0), "ZNA");
 
         allowedZappers[zapper] = true;
+
+        emit LogAllowZapper( zapper );
     }
 
     function removeZapper(address zapper) external onlyPolicy {
 
         allowedZappers[zapper] = false;
+
+        emit LogRemoveZapper( zapper );
     }
 
 
@@ -765,6 +789,9 @@ contract ETHLPBondDepository is Ownable {
                 staking.stake( _amount, _recipient );
             }
         }
+
+        emit LogStakeOrSend( _recipient, _stake, _amount );
+
         return _amount;
     }
 

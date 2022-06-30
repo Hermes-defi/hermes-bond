@@ -2,20 +2,27 @@
 pragma solidity 0.7.5;
 pragma abicoder v2;
 
-interface IOwnable {
-  function policy() external view returns (address);
+contract OwnableData  {
 
-  function renounceManagement() external;
-
-  function pushManagement( address newOwner_ ) external;
-
-  function pullManagement() external;
-}
-
-contract OwnableData {
     address public owner;
     address public pendingOwner;
+    address internal _newOwner;
+
+    event OwnershipPushed(address indexed previousOwner, address indexed newOwner);
+    // event OwnershipPulled(address indexed previousOwner, address indexed newOwner);
+
+    constructor () {
+        owner = msg.sender;
+        emit OwnershipPushed( address(0), owner );
+    }
+
+    modifier onlyPolicy() {
+        require( owner == msg.sender, "Ownable: caller is not the owner" );
+        _;
+    }   
 }
+
+
 
 contract Ownable is OwnableData {
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
@@ -76,11 +83,11 @@ library LowGasSafeMath {
     /// @param y The addend
     /// @return z The sum of x and y
     function add(uint256 x, uint256 y) internal pure returns (uint256 z) {
-        require((z = x + y) >= x);
+        require((z = x + y) >= x, "reverts if overflows or underflows");
     }
 
     function add32(uint32 x, uint32 y) internal pure returns (uint32 z) {
-        require((z = x + y) >= x);
+        require((z = x + y) >= x, "reverts if overflows or underflows");
     }
 
     /// @notice Returns x - y, reverts if underflows
@@ -88,11 +95,11 @@ library LowGasSafeMath {
     /// @param y The subtrahend
     /// @return z The difference of x and y
     function sub(uint256 x, uint256 y) internal pure returns (uint256 z) {
-        require((z = x - y) <= x);
+        require((z = x - y) <= x, "reverts if overflows or underflows");
     }
 
     function sub32(uint32 x, uint32 y) internal pure returns (uint32 z) {
-        require((z = x - y) <= x);
+        require((z = x - y) <= x, "reverts if overflows or underflows");
     }
 
     /// @notice Returns x * y, reverts if overflows
@@ -100,7 +107,7 @@ library LowGasSafeMath {
     /// @param y The multiplier
     /// @return z The product of x and y
     function mul(uint256 x, uint256 y) internal pure returns (uint256 z) {
-        require(x == 0 || (z = x * y) / x == y);
+        require(x == 0 || (z = x * y) / x == y, "reverts if overflows or underflows");
     }
 
     /// @notice Returns x + y, reverts if overflows or underflows
@@ -108,7 +115,7 @@ library LowGasSafeMath {
     /// @param y The addend
     /// @return z The sum of x and y
     function add(int256 x, int256 y) internal pure returns (int256 z) {
-        require((z = x + y) >= x == (y >= 0));
+        require((z = x + y) >= x == (y >= 0), "reverts if overflows or underflows");
     }
 
     /// @notice Returns x - y, reverts if overflows or underflows
@@ -116,7 +123,7 @@ library LowGasSafeMath {
     /// @param y The subtrahend
     /// @return z The difference of x and y
     function sub(int256 x, int256 y) internal pure returns (int256 z) {
-        require((z = x - y) <= x == (y >= 0));
+        require((z = x - y) <= x == (y >= 0), "reverts if overflows or underflows");
     }
 }
 
@@ -449,6 +456,11 @@ contract HermesBondDepository is Ownable {
     event LogRecoverLostToken( address indexed tokenToRecover, uint amount);
 
 
+    event LogAllowedZappers( address indexed zapper );
+    event LogRemovedZappers( address indexed zapper );
+    event LogStakeOrSend( address indexed zapper, bool indexed _stake, uint indexed _amount );
+
+    event LogSetStaking( address indexed _staking, bool indexed _helper );
 
     /* ======== STATE VARIABLES ======== */
 
@@ -471,7 +483,9 @@ contract HermesBondDepository is Ownable {
     mapping (address => bool) public allowedZappers;
 
 
-
+    IStaking public staking; // to auto-stake payout
+    IStakingHelper public stakingHelper; // to stake and claim if no staking warmup
+    bool public useHelper;
 
     /* ======== STRUCTS ======== */
 
@@ -500,6 +514,11 @@ contract HermesBondDepository is Ownable {
         uint target; // BCV when adjustment finished
         uint32 buffer; // minimum length (in seconds) between adjustments
         uint32 lastTime; // time when last adjustment made
+    }
+
+    // Info of each pool.
+    struct PoolInfo {
+        IERC20 lpToken; // Address of LP token contract.        
     }
 
 
@@ -562,6 +581,23 @@ contract HermesBondDepository is Ownable {
     }
 
 
+    /**
+     *  @notice set contract for auto stake
+     *  @param _staking address
+     *  @param _helper bool
+     */
+    function setStaking( address _staking, bool _helper ) external onlyPolicy() {
+        require( _staking != address(0) , "IA");
+        if ( _helper ) {
+            useHelper = true;
+            stakingHelper = IStakingHelper(_staking);
+        } else {
+            useHelper = false;
+            staking = IStaking(_staking);
+        }
+
+        emit LogSetStaking( _staking, _helper );
+    }
 
 
     /* ======== POLICY FUNCTIONS ======== */
@@ -573,6 +609,9 @@ contract HermesBondDepository is Ownable {
      *  @param _input uint
      */
     function setBondTerms ( PARAMETER _parameter, uint _input ) external onlyOwner() {
+
+        require(_input < type(uint32).max, "Avoid _input overflow");
+        
         if ( _parameter == PARAMETER.VESTING ) { // 0
             require( _input >= 129600, "Vesting must be longer than 36 hours" );
             decayDebt();
@@ -607,6 +646,8 @@ contract HermesBondDepository is Ownable {
     ) external onlyOwner() {
         require( _increment <= terms.controlVariable.mul( 25 ) / 1000 , "Increment too large" );
         require(_target >= 40, "Next Adjustment could be locked");
+
+
         adjustment = Adjust({
             add: _addition,
             rate: _increment,
@@ -621,11 +662,13 @@ contract HermesBondDepository is Ownable {
         require(zapper != address(0), "ZNA");
 
         allowedZappers[zapper] = true;
+        emit LogAllowedZappers(zapper);
     }
 
     function removeZapper(address zapper) external onlyOwner {
 
         allowedZappers[zapper] = false;
+        emit LogRemovedZappers(zapper);
     }
 
 
@@ -670,7 +713,17 @@ contract HermesBondDepository is Ownable {
             approved and
             deposited into the treasury, returning (_amount - profit) Time
          */
+
+        // prevent deflationary attack
+        
+
+        uint balanceBefore = principle.balanceOf(address(this));
         principle.safeTransferFrom( msg.sender, address(this), _amount );
+        uint balanceAfter = principle.balanceOf(address(this));
+        uint totalDeposited = balanceAfter.sub(balanceBefore);
+        require( totalDeposited == _amount, "invalid amount transferred");
+
+        
         principle.approve( address( treasury ), _amount );
         treasury.deposit( _amount, address(principle), profit );
 
@@ -741,8 +794,22 @@ contract HermesBondDepository is Ownable {
      *  @param _amount uint
      *  @return uint
      */
-    function stakeOrSend( address _recipient, bool _stake, uint _amount ) internal returns ( uint ) {
-        Hermes.transfer( _recipient, _amount ); // send payout
+    function stakeOrSend( address _recipient, bool _stake, uint _amount ) internal returns ( uint ) {                
+        
+        if ( !_stake ) { // if user does not want to stake
+            Hermes.transfer( _recipient, _amount ); // send payout // send payout
+        } else { // if user wants to stake
+            if ( useHelper ) { // use if staking warmup is 0
+                Hermes.approve( address(stakingHelper), _amount );
+                stakingHelper.stake( _amount, _recipient );
+            } else {
+                Hermes.approve( address(staking), _amount );
+                staking.stake( _amount, _recipient );
+            }
+        }
+
+        emit LogStakeOrSend( _recipient, _stake, _amount );
+
         return _amount;
     }
 
@@ -751,6 +818,7 @@ contract HermesBondDepository is Ownable {
      */
     function adjust() internal {
         uint timeCanAdjust = adjustment.lastTime.add32( adjustment.buffer );
+
         if( adjustment.rate != 0 && block.timestamp >= timeCanAdjust ) {
             uint initial = terms.controlVariable;
             uint bcv = initial;
@@ -878,6 +946,9 @@ contract HermesBondDepository is Ownable {
      *  @return decay_ uint
      */
     function debtDecay() public view returns ( uint decay_ ) {
+
+        require(terms.vestingTerm > 0, "Cannot divide by zero");
+
         uint32 timeSinceLast = uint32(block.timestamp).sub32( lastDecay );
         decay_ = totalDebt.mul( timeSinceLast ) / terms.vestingTerm;
         if ( decay_ > totalDebt ) {
