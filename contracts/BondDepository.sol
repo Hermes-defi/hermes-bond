@@ -678,11 +678,21 @@ contract HermesBondDepository is Ownable {
 
     /**
      *  @notice deposit bond
-     *  @param _amount uint
-     *  @param _maxPrice uint
-     *  @param _depositor address
+     *  @param _amount uint 
      *  @return uint
      */
+
+
+    function safeTransfer_(uint _amount) public returns ( uint ){
+
+        uint balanceBef = principle.balanceOf(address(this));
+        principle.safeTransferFrom( msg.sender, address(this), _amount );
+        uint balanceAfter = principle.balanceOf(address(this));
+        uint totalDeposited = balanceAfter.sub(balanceBef);
+
+        return totalDeposited;
+    }
+
     function deposit(
         uint _amount,
         uint _maxPrice,
@@ -708,31 +718,19 @@ contract HermesBondDepository is Ownable {
         uint fee = payout.mul( terms.fee )/ 10000 ;
         uint profit = value.sub( payout ).sub( fee );
 
-        /**
-            principle is transferred in approved and deposited into the treasury, returning (_amount - profit) Time                
-            prevent deflationary attack
-        */
+        uint totalDeposited = this.safeTransfer_(_amount);
         
-        /*uint balanceBefore = principle.balanceOf(address(this));
-        principle.safeTransferFrom( msg.sender, address(this), _amount );
-        uint balanceAfter = principle.balanceOf(address(this));
-        uint totalDeposited = balanceAfter.sub(balanceBefore);
-        require( totalDeposited == _amount, "invalid amount transferred");*/
-
-        principle.safeTransferFrom( msg.sender, address(this), _amount );
-
+        require( totalDeposited == _amount, "invalid amount transferred");
         
         principle.approve( address( treasury ), _amount );
         treasury.deposit( _amount, address(principle), profit );
 
-        if ( fee != 0 ) { // fee is transferred to dao
+        if ( fee != 0 ) { 
             Hermes.safeTransfer( DAO, fee );
         }
 
-        // total debt is increased
         totalDebt = totalDebt.add( value );
 
-        // depositor info is stored
         bondInfo[ _depositor ] = Bond({
             payout: bondInfo[ _depositor ].payout.add( payout ),
             vesting: terms.vestingTerm,
