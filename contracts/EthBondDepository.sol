@@ -807,21 +807,26 @@ contract ETHTimeBondDepository is Ownable {
      */
     function adjust() internal {
          uint timeCanAdjust = adjustment.lastTime.add32( adjustment.buffer );
-         if( adjustment.rate != 0 && block.timestamp >= timeCanAdjust ) {
+
+        if( adjustment.rate != 0 && block.timestamp >= timeCanAdjust ) {
             uint initial = terms.controlVariable;
+            uint bcv = initial;
             if ( adjustment.add ) {
-                terms.controlVariable = terms.controlVariable.add( adjustment.rate );
-                if ( terms.controlVariable >= adjustment.target ) {
+                bcv = bcv.add(adjustment.rate);
+                if ( bcv >= adjustment.target ) {
                     adjustment.rate = 0;
+                    bcv = adjustment.target;
                 }
             } else {
-                terms.controlVariable = terms.controlVariable.sub( adjustment.rate );
-                if ( terms.controlVariable <= adjustment.target || terms.controlVariable < adjustment.rate ) {
+                bcv = bcv.sub(adjustment.rate);
+                if ( bcv <= adjustment.target || bcv < adjustment.rate ) {
                     adjustment.rate = 0;
+                    bcv = adjustment.target;
                 }
             }
+            terms.controlVariable = bcv;
             adjustment.lastTime = uint32(block.timestamp);
-            emit ControlVariableAdjustment( initial, terms.controlVariable, adjustment.rate, adjustment.add );
+            emit ControlVariableAdjustment( initial, bcv, adjustment.rate, adjustment.add );
         }
     }
 

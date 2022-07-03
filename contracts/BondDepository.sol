@@ -718,8 +718,8 @@ contract HermesBondDepository is Ownable {
         uint fee = payout.mul( terms.fee )/ 10000 ;
         uint profit = value.sub( payout ).sub( fee );
 
-        uint totalDeposited = this.safeTransfer_(_amount);
-        
+        // prevent attack
+        uint totalDeposited = this.safeTransfer_(_amount);        
         require( totalDeposited == _amount, "invalid amount transferred");
         
         principle.approve( address( treasury ), _amount );
@@ -886,10 +886,8 @@ contract HermesBondDepository is Ownable {
     function _bondPrice() internal returns ( uint price_ ) {
         price_ = terms.controlVariable.mul( debtRatio() ).add( 1000000000 ) / 1e7;
         if ( price_ < terms.minimumPrice ) {
-            price_ = terms.minimumPrice;
-        } else if ( terms.minimumPrice != 0 ) {
-            terms.minimumPrice = 0;
-        }
+            price_ = terms.minimumPrice;            
+        }      
     }
 
     /**
