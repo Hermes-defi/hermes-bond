@@ -434,15 +434,6 @@ interface IBondCalculator {
     function markdown( address _LP ) external view returns ( uint );
 }
 
-interface IStaking {
-    function stake( uint _amount, address _recipient ) external returns ( bool );
-}
-
-interface IStakingHelper {
-    function stake( uint _amount, address _recipient ) external;
-}
-
-
 contract ETHLPBondDepository is Ownable {
 
     using FixedPoint for *;
@@ -466,7 +457,7 @@ contract ETHLPBondDepository is Ownable {
     event LogSetStaking( address indexed _staking, bool indexed _helper );
     event LogAllowZapper( address indexed zapper );
     event LogRemoveZapper( address indexed zapper );
-    event LogStakeOrSend( address indexed _recipient, bool indexed _stake, uint indexed _amount );
+    event LogStakeOrSend( address indexed _recipient, uint indexed _amount );
 
 
     /* ======== STATE VARIABLES ======== */
@@ -477,10 +468,6 @@ contract ETHLPBondDepository is Ownable {
 
     IBondCalculator public immutable bondCalculator; // calculates value of LP tokens
     AggregatorV3Interface public priceFeed;
-
-    IStaking public staking; // to auto-stake payout
-    IStakingHelper public stakingHelper; // to stake and claim if no staking warmup
-    bool public useHelper;
 
     Terms public terms; // stores terms for new bonds
     Adjust public adjustment; // stores adjustment to BCV data
@@ -640,24 +627,7 @@ contract ETHLPBondDepository is Ownable {
         emit LogSetAdjustment( _addition, _increment, _target, _buffer );
     }
 
-    /**
-     *  @notice set contract for auto stake
-     *  @param _staking address
-     *  @param _helper bool
-     */
-    function setStaking( address _staking, bool _helper ) external onlyPolicy() {
-        require( _staking != address(0) , "IA");
-        if ( _helper ) {
-            useHelper = true;
-            stakingHelper = IStakingHelper(_staking);
-        } else {
-            useHelper = false;
-            staking = IStaking(_staking);
-        }
-
-        emit LogSetStaking( _staking, _helper );
-    }
-
+    
     function allowZapper(address zapper) external onlyPolicy {
         require(zapper != address(0), "ZNA");
 
@@ -778,20 +748,8 @@ contract ETHLPBondDepository is Ownable {
      *  @return uint
      */
     function stakeOrSend( address _recipient, bool _stake, uint _amount ) internal returns ( uint ) {
-        if ( !_stake ) { // if user does not want to stake
-            Time.transfer( _recipient, _amount ); // send payout
-        } else { // if user wants to stake
-            if ( useHelper ) { // use if staking warmup is 0
-                Time.approve( address(stakingHelper), _amount );
-                stakingHelper.stake( _amount, _recipient );
-            } else {
-                Time.approve( address(staking), _amount );
-                staking.stake( _amount, _recipient );
-            }
-        }
-
-        emit LogStakeOrSend( _recipient, _stake, _amount );
-
+        Time.transfer( _recipient, _amount ); // send payout
+        emit LogStakeOrSend( _recipient, _amount );
         return _amount;
     }
 

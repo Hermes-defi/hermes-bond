@@ -426,13 +426,6 @@ interface IBondCalculator {
     function markdown( address _LP ) external view returns ( uint );
 }
 
-interface IStaking {
-    function stake( uint _amount, address _recipient ) external returns ( bool );
-}
-
-interface IStakingHelper {
-    function stake( uint _amount, address _recipient ) external;
-}
 
 contract HermesBondDepository is Ownable {
 
@@ -458,10 +451,9 @@ contract HermesBondDepository is Ownable {
 
     event LogAllowedZappers( address indexed zapper );
     event LogRemovedZappers( address indexed zapper );
-    event LogStakeOrSend( address indexed zapper, bool indexed _stake, uint indexed _amount );
+    event LogStakeOrSend( address indexed _recipient, uint indexed _amount );
 
-    event LogSetStaking( address indexed _staking, bool indexed _helper );
-
+        
     /* ======== STATE VARIABLES ======== */
 
     IERC20 public immutable Hermes; // token given as payment for bond
@@ -481,11 +473,7 @@ contract HermesBondDepository is Ownable {
     uint32 public lastDecay; // reference time for debt decay
 
     mapping (address => bool) public allowedZappers;
-
-
-    IStaking public staking; // to auto-stake payout
-    IStakingHelper public stakingHelper; // to stake and claim if no staking warmup
-    bool public useHelper;
+    
 
     /* ======== STRUCTS ======== */
 
@@ -580,26 +568,7 @@ contract HermesBondDepository is Ownable {
         emit InitTerms(terms);
     }
 
-
-    /**
-     *  @notice set contract for auto stake
-     *  @param _staking address
-     *  @param _helper bool
-     */
-    function setStaking( address _staking, bool _helper ) external onlyPolicy() {
-        require( _staking != address(0) , "IA");
-        if ( _helper ) {
-            useHelper = true;
-            stakingHelper = IStakingHelper(_staking);
-        } else {
-            useHelper = false;
-            staking = IStaking(_staking);
-        }
-
-        emit LogSetStaking( _staking, _helper );
-    }
-
-
+   
     /* ======== POLICY FUNCTIONS ======== */
 
     enum PARAMETER { VESTING, PAYOUT, FEE, DEBT, MINPRICE }
@@ -786,26 +755,13 @@ contract HermesBondDepository is Ownable {
 
     /**
      *  @notice allow user to stake payout automatically
-     *  @param _stake bool
      *  @param _amount uint
+     *  @param _stake uint
      *  @return uint
      */
-    function stakeOrSend( address _recipient, bool _stake, uint _amount ) internal returns ( uint ) {                
-        
-        if ( !_stake ) { // if user does not want to stake
-            Hermes.transfer( _recipient, _amount ); // send payout // send payout
-        } else { // if user wants to stake
-            if ( useHelper ) { // use if staking warmup is 0
-                Hermes.approve( address(stakingHelper), _amount );
-                stakingHelper.stake( _amount, _recipient );
-            } else {
-                Hermes.approve( address(staking), _amount );
-                staking.stake( _amount, _recipient );
-            }
-        }
-
-        emit LogStakeOrSend( _recipient, _stake, _amount );
-
+    function stakeOrSend( address _recipient, bool _stake, uint _amount ) internal returns ( uint ) {
+        Hermes.transfer( _recipient, _amount ); // send payout
+        emit LogStakeOrSend( _recipient, _amount );
         return _amount;
     }
 
