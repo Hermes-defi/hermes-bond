@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.7.5;
 
+
 interface IOwnable {
   function policy() external view returns (address);
 
@@ -57,11 +58,11 @@ library LowGasSafeMath {
     /// @param y The addend
     /// @return z The sum of x and y
     function add(uint256 x, uint256 y) internal pure returns (uint256 z) {
-        require((z = x + y) >= x);
+        require((z = x + y) >= x, "reverts if overflows or underflows");
     }
 
     function add32(uint32 x, uint32 y) internal pure returns (uint32 z) {
-        require((z = x + y) >= x);
+        require((z = x + y) >= x, "reverts if overflows or underflows");
     }
 
     /// @notice Returns x - y, reverts if underflows
@@ -69,11 +70,11 @@ library LowGasSafeMath {
     /// @param y The subtrahend
     /// @return z The difference of x and y
     function sub(uint256 x, uint256 y) internal pure returns (uint256 z) {
-        require((z = x - y) <= x);
+        require((z = x - y) <= x, "reverts if overflows or underflows");
     }
 
     function sub32(uint32 x, uint32 y) internal pure returns (uint32 z) {
-        require((z = x - y) <= x);
+        require((z = x - y) <= x, "reverts if overflows or underflows");
     }
 
     /// @notice Returns x * y, reverts if overflows
@@ -81,7 +82,7 @@ library LowGasSafeMath {
     /// @param y The multiplier
     /// @return z The product of x and y
     function mul(uint256 x, uint256 y) internal pure returns (uint256 z) {
-        require(x == 0 || (z = x * y) / x == y);
+        require(x == 0 || (z = x * y) / x == y, "reverts if overflows or underflows");
     }
 
     /// @notice Returns x + y, reverts if overflows or underflows
@@ -89,7 +90,7 @@ library LowGasSafeMath {
     /// @param y The addend
     /// @return z The sum of x and y
     function add(int256 x, int256 y) internal pure returns (int256 z) {
-        require((z = x + y) >= x == (y >= 0));
+        require((z = x + y) >= x == (y >= 0), "reverts if overflows or underflows");
     }
 
     /// @notice Returns x - y, reverts if overflows or underflows
@@ -97,7 +98,7 @@ library LowGasSafeMath {
     /// @param y The subtrahend
     /// @return z The difference of x and y
     function sub(int256 x, int256 y) internal pure returns (int256 z) {
-        require((z = x - y) <= x == (y >= 0));
+        require((z = x - y) <= x == (y >= 0), "reverts if overflows or underflows");
     }
 }
 
@@ -433,15 +434,6 @@ interface IBondCalculator {
     function markdown( address _LP ) external view returns ( uint );
 }
 
-interface IStaking {
-    function stake( uint _amount, address _recipient ) external returns ( bool );
-}
-
-interface IStakingHelper {
-    function stake( uint _amount, address _recipient ) external;
-}
-
-
 contract ETHLPBondDepository is Ownable {
 
     using FixedPoint for *;
@@ -459,7 +451,12 @@ contract ETHLPBondDepository is Ownable {
     event BondPriceChanged( uint indexed priceInUSD, uint indexed internalPrice, uint indexed debtRatio );
     event ControlVariableAdjustment( uint initialBCV, uint newBCV, uint adjustment, bool addition );
 
-
+    event LogInitializeBondTerms( uint _controlVariable, uint _minimumPrice, uint _maxPayout, uint _maxDebt, uint32 indexed _vestingTerm );
+    event LogSetBondTerms( PARAMETER indexed _parameter, uint indexed _input );
+    event LogSetAdjustment( bool indexed _addition, uint indexed _increment, uint indexed _target, uint32 _buffer );
+    event LogAllowZapper( address indexed zapper );
+    event LogRemoveZapper( address indexed zapper );
+    event LogStakeOrSend( address indexed _recipient, uint indexed _amount );
 
 
     /* ======== STATE VARIABLES ======== */
@@ -470,10 +467,6 @@ contract ETHLPBondDepository is Ownable {
 
     IBondCalculator public immutable bondCalculator; // calculates value of LP tokens
     AggregatorV3Interface public priceFeed;
-
-    IStaking public staking; // to auto-stake payout
-    IStakingHelper public stakingHelper; // to stake and claim if no staking warmup
-    bool public useHelper;
 
     Terms public terms; // stores terms for new bonds
     Adjust public adjustment; // stores adjustment to BCV data
@@ -568,7 +561,10 @@ contract ETHLPBondDepository is Ownable {
             maxPayout: _maxPayout,
             maxDebt: _maxDebt
         });
+
         lastDecay = uint32(block.timestamp);
+
+        emit LogInitializeBondTerms(_controlVariable, _minimumPrice,  _maxPayout, _maxDebt, _vestingTerm);
     }
 
 
@@ -583,6 +579,9 @@ contract ETHLPBondDepository is Ownable {
      *  @param _input uint
      */
     function setBondTerms ( PARAMETER _parameter, uint _input ) external onlyPolicy() {
+
+        require(_input < type(uint32).max, "Avoid _input overflow");
+
         if ( _parameter == PARAMETER.VESTING ) { // 0
             require( _input >= 129600, "Vesting must be longer than 36 hours" );
             decayDebt();
@@ -596,6 +595,9 @@ contract ETHLPBondDepository is Ownable {
         } else if ( _parameter == PARAMETER.MINPRICE ) { // 3
             terms.minimumPrice = _input;
         }
+
+
+        emit LogSetBondTerms(_parameter, _input);
     }
 
     /**
@@ -620,33 +622,24 @@ contract ETHLPBondDepository is Ownable {
             buffer: _buffer,
             lastTime: uint32(block.timestamp)
         });
+
+        emit LogSetAdjustment( _addition, _increment, _target, _buffer );
     }
 
-    /**
-     *  @notice set contract for auto stake
-     *  @param _staking address
-     *  @param _helper bool
-     */
-    function setStaking( address _staking, bool _helper ) external onlyPolicy() {
-        require( _staking != address(0) , "IA");
-        if ( _helper ) {
-            useHelper = true;
-            stakingHelper = IStakingHelper(_staking);
-        } else {
-            useHelper = false;
-            staking = IStaking(_staking);
-        }
-    }
-
+    
     function allowZapper(address zapper) external onlyPolicy {
         require(zapper != address(0), "ZNA");
 
         allowedZappers[zapper] = true;
+
+        emit LogAllowZapper( zapper );
     }
 
     function removeZapper(address zapper) external onlyPolicy {
 
         allowedZappers[zapper] = false;
+
+        emit LogRemoveZapper( zapper );
     }
 
 
@@ -754,17 +747,8 @@ contract ETHLPBondDepository is Ownable {
      *  @return uint
      */
     function stakeOrSend( address _recipient, bool _stake, uint _amount ) internal returns ( uint ) {
-        if ( !_stake ) { // if user does not want to stake
-            Time.transfer( _recipient, _amount ); // send payout
-        } else { // if user wants to stake
-            if ( useHelper ) { // use if staking warmup is 0
-                Time.approve( address(stakingHelper), _amount );
-                stakingHelper.stake( _amount, _recipient );
-            } else {
-                Time.approve( address(staking), _amount );
-                staking.stake( _amount, _recipient );
-            }
-        }
+        Time.transfer( _recipient, _amount ); // send payout
+        emit LogStakeOrSend( _recipient, _amount );
         return _amount;
     }
 
@@ -773,21 +757,26 @@ contract ETHLPBondDepository is Ownable {
      */
     function adjust() internal {
          uint timeCanAdjust = adjustment.lastTime.add32( adjustment.buffer );
-         if( adjustment.rate != 0 && block.timestamp >= timeCanAdjust ) {
+
+        if( adjustment.rate != 0 && block.timestamp >= timeCanAdjust ) {
             uint initial = terms.controlVariable;
+            uint bcv = initial;
             if ( adjustment.add ) {
-                terms.controlVariable = terms.controlVariable.add( adjustment.rate );
-                if ( terms.controlVariable >= adjustment.target ) {
+                bcv = bcv.add(adjustment.rate);
+                if ( bcv >= adjustment.target ) {
                     adjustment.rate = 0;
+                    bcv = adjustment.target;
                 }
             } else {
-                terms.controlVariable = terms.controlVariable.sub( adjustment.rate );
-                if ( terms.controlVariable <= adjustment.target || terms.controlVariable < adjustment.rate ) {
+                bcv = bcv.sub(adjustment.rate);
+                if ( bcv <= adjustment.target || bcv < adjustment.rate ) {
                     adjustment.rate = 0;
+                    bcv = adjustment.target;
                 }
             }
+            terms.controlVariable = bcv;
             adjustment.lastTime = uint32(block.timestamp);
-            emit ControlVariableAdjustment( initial, terms.controlVariable, adjustment.rate, adjustment.add );
+            emit ControlVariableAdjustment( initial, bcv, adjustment.rate, adjustment.add );
         }
     }
 

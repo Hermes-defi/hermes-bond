@@ -3,6 +3,8 @@
 pragma solidity 0.7.5;
 
 
+
+
 contract LibNote {
   event LogNote(
     bytes4   indexed  sig,
