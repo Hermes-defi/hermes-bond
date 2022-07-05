@@ -454,7 +454,6 @@ contract ETHLPBondDepository is Ownable {
     event LogInitializeBondTerms( uint _controlVariable, uint _minimumPrice, uint _maxPayout, uint _maxDebt, uint32 indexed _vestingTerm );
     event LogSetBondTerms( PARAMETER indexed _parameter, uint indexed _input );
     event LogSetAdjustment( bool indexed _addition, uint indexed _increment, uint indexed _target, uint32 _buffer );
-    event LogSetStaking( address indexed _staking, bool indexed _helper );
     event LogAllowZapper( address indexed zapper );
     event LogRemoveZapper( address indexed zapper );
     event LogStakeOrSend( address indexed _recipient, uint indexed _amount );

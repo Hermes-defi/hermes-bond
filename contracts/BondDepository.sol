@@ -503,14 +503,7 @@ contract HermesBondDepository is Ownable {
         uint32 buffer; // minimum length (in seconds) between adjustments
         uint32 lastTime; // time when last adjustment made
     }
-
-    // Info of each pool.
-    struct PoolInfo {
-        IERC20 lpToken; // Address of LP token contract.        
-    }
-
-
-
+  
 
     /* ======== INITIALIZATION ======== */
 
