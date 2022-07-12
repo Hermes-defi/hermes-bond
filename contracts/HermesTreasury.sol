@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.7.5;
+pragma solidity >=0.7.5 <0.9.0;
 
 
 
@@ -240,13 +240,17 @@ interface IBondCalculator {
   function valuation( address pair_, uint amount_ ) external view returns ( uint _value );
 }
 
+
+
+
+
 contract HermesTreasury is Ownable {
 
     using LowGasSafeMath for uint;
     using LowGasSafeMath for uint32;
     using SafeERC20 for IERC20;
 
-    event Deposit( address indexed token, uint amount, uint value );
+    event Deposit( address indexed token, uint amount, uint value );    
     event Withdrawal( address indexed token, uint amount, uint value );
     event CreateDebt( address indexed debtor, address indexed token, uint amount, uint value );
     event RepayDebt( address indexed debtor, address indexed token, uint amount, uint value );
@@ -324,6 +328,9 @@ contract HermesTreasury is Ownable {
     uint public totalReserves; // Risk-free value of all assets
     uint public totalDebt;
 
+
+    bool internal locked; // reentrancy guard
+
     constructor (
         address _Time,
         address _MIM,
@@ -347,6 +354,7 @@ contract HermesTreasury is Ownable {
         limitAmount = amount;
         emit ChangeLimitAmount(limitAmount);
     }
+
 
     /**
         @notice allow approved address to deposit an asset for Time
@@ -398,12 +406,26 @@ contract HermesTreasury is Ownable {
         emit Withdrawal( _token, _amount, value );
     }
 
+
+
+    
+    modifier reentrancyGuard() {
+        require(!locked);
+        
+        locked = true;
+        _;
+        locked = false;
+    }
+
     /**
         @notice allow approved address to borrow reserves
         @param _amount uint
         @param _token address
      */
-    function incurDebt( uint _amount, address _token ) external {
+
+     
+    function incurDebt( uint _amount, address _token ) external  reentrancyGuard {
+        
         require( isDebtor[ msg.sender ], "Not approved" );
         require( isReserveToken[ _token ], "Not accepted" );
 
@@ -413,6 +435,8 @@ contract HermesTreasury is Ownable {
         uint balance = debtorBalance[ msg.sender ];
         uint availableDebt = maximumDebt.sub( balance );
         require( value <= availableDebt, "Exceeds debt limit" );
+
+        
         limitRequirements(msg.sender, value);
         debtorBalance[ msg.sender ] = balance.add( value );
         totalDebt = totalDebt.add( value );
@@ -434,7 +458,15 @@ contract HermesTreasury is Ownable {
         require( isDebtor[ msg.sender ], "Not approved" );
         require( isReserveToken[ _token ], "Not accepted" );
 
-        IERC20( _token ).safeTransferFrom( msg.sender, address(this), _amount );
+         // prevent deflationary attack
+        uint balanceBefore =  IERC20( _token ).balanceOf(address(this));
+        IERC20( _token ).safeTransferFrom( msg.sender, address(this), _amount );        
+        uint balanceAfter =  IERC20( _token ).balanceOf(address(this));
+        uint totalDeposited = balanceAfter.sub(balanceBefore);
+
+        require( totalDeposited == _amount, "invalid amount transferred");
+
+        
 
         uint value = valueOf( _token, _amount );
         debtorBalance[ msg.sender ] = debtorBalance[ msg.sender ].sub( value );
@@ -451,11 +483,18 @@ contract HermesTreasury is Ownable {
         @param _amount uint
      */
     function repayDebtWithTime( uint _amount ) external {
+
         require( isDebtor[ msg.sender ], "Not approved as debtor" );
         require( isReserveSpender[ msg.sender ], "Not approved as spender" );
 
+        uint balanceBefore = Time.balanceOf(address(this));
         Time.burnFrom( msg.sender, _amount );
+        uint balanceAfter = Time.balanceOf(address(this));
+        uint totalDeposited = balanceAfter.sub(balanceBefore);
 
+        require( totalDeposited == _amount, "invalid amount transferred");
+
+        
         debtorBalance[ msg.sender ] = debtorBalance[ msg.sender ].sub( _amount );
         totalDebt = totalDebt.sub( _amount );
 
