@@ -1,16 +1,19 @@
-const _treasure = artifacts.require("TimeTreasury");
+const _treasure = artifacts.require("HermesTreasury");
 const _dai = artifacts.require("DAI");
 const _ohm = artifacts.require("ERC20Token");
-const dev = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
-
+const dev = "0x78B3Ec25D285F7a9EcA8Da8eb6b20Be4d5D70E84";
+// truffle exec scripts\depositToTreasure.js --network bsc_testnet
 module.exports = async function (deployer, network, accounts) {
     const treasure = await _treasure.deployed();
     const ohm = await _ohm.deployed();
     const dai = await _dai.deployed();
+    /*
     try {
         const amount = '100000000000000000000000'; // 10k
         // await ohm.burn('100000000000000');
+        console.log('mint '+amount+' to '+dev)
         await dai.mint(dev, amount);
+        console.log('approve')
         await dai.approve(treasure.address, '0');
         await dai.approve(treasure.address, amount);
         const isReserveToken = await treasure.isReserveToken(dai.address);
@@ -21,7 +24,8 @@ module.exports = async function (deployer, network, accounts) {
 
             const ohmBalanceOfDev1 = await ohm.balanceOf(dev);
             const daiBalanceOfDev1 = await dai.balanceOf(treasure.address);
-            await treasure.deposit(amount, dai.address, '0');
+            const tx = await treasure.deposit(amount, dai.address, '0');
+            console.log(tx);
             const ohmBalanceOfDev2 = await ohm.balanceOf(dev);
             const daiBalanceOfDev2 = await dai.balanceOf(treasure.address);
             const totalReserves = await treasure.totalReserves();
@@ -36,7 +40,7 @@ module.exports = async function (deployer, network, accounts) {
     }catch(e){
         console.log(e.toString());
     }
-
+*/
     const totalReserves = (await treasure.totalReserves()).toString();
     const totalSupply = (await ohm.totalSupply()).toString();
     const excess = totalReserves - totalSupply;

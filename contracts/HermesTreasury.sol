@@ -250,7 +250,7 @@ contract HermesTreasury is Ownable {
     using LowGasSafeMath for uint32;
     using SafeERC20 for IERC20;
 
-    event Deposit( address indexed token, uint amount, uint value );    
+    event Deposit( address indexed token, uint amount, uint value );
     event Withdrawal( address indexed token, uint amount, uint value );
     event CreateDebt( address indexed debtor, address indexed token, uint amount, uint value );
     event RepayDebt( address indexed debtor, address indexed token, uint amount, uint value );
@@ -392,7 +392,7 @@ contract HermesTreasury is Ownable {
         @param _token address
      */
     function withdraw( uint _amount, address _token ) external {
-        require( isReserveToken[ _token ], "Not accepted" ); // Only reserves can be used for redemptions
+        require( isReserveToken[ _token ] || isLiquidityToken[ _token ], "Not accepted" ); // Only reserves can be used for redemptions
         require( isReserveSpender[ msg.sender ], "Not approved" );
 
         uint value = valueOf( _token, _amount );
@@ -408,10 +408,10 @@ contract HermesTreasury is Ownable {
 
 
 
-    
+
     modifier reentrancyGuard() {
         require(!locked);
-        
+
         locked = true;
         _;
         locked = false;
@@ -423,11 +423,11 @@ contract HermesTreasury is Ownable {
         @param _token address
      */
 
-     
+
     function incurDebt( uint _amount, address _token ) external  reentrancyGuard {
-        
+
         require( isDebtor[ msg.sender ], "Not approved" );
-        require( isReserveToken[ _token ], "Not accepted" );
+        require( isReserveToken[ _token ] || isLiquidityToken[ _token ], "Not accepted" );
 
         uint value = valueOf( _token, _amount );
 
@@ -436,7 +436,7 @@ contract HermesTreasury is Ownable {
         uint availableDebt = maximumDebt.sub( balance );
         require( value <= availableDebt, "Exceeds debt limit" );
 
-        
+
         limitRequirements(msg.sender, value);
         debtorBalance[ msg.sender ] = balance.add( value );
         totalDebt = totalDebt.add( value );
@@ -456,17 +456,17 @@ contract HermesTreasury is Ownable {
      */
     function repayDebtWithReserve( uint _amount, address _token ) external {
         require( isDebtor[ msg.sender ], "Not approved" );
-        require( isReserveToken[ _token ], "Not accepted" );
+        require( isReserveToken[ _token ] || isLiquidityToken[ _token ], "Not accepted" );
 
          // prevent deflationary attack
         uint balanceBefore =  IERC20( _token ).balanceOf(address(this));
-        IERC20( _token ).safeTransferFrom( msg.sender, address(this), _amount );        
+        IERC20( _token ).safeTransferFrom( msg.sender, address(this), _amount );
         uint balanceAfter =  IERC20( _token ).balanceOf(address(this));
         uint totalDeposited = balanceAfter.sub(balanceBefore);
 
         require( totalDeposited == _amount, "invalid amount transferred");
 
-        
+
 
         uint value = valueOf( _token, _amount );
         debtorBalance[ msg.sender ] = debtorBalance[ msg.sender ].sub( value );
@@ -494,7 +494,7 @@ contract HermesTreasury is Ownable {
 
         require( totalDeposited == _amount, "invalid amount transferred");
 
-        
+
         debtorBalance[ msg.sender ] = debtorBalance[ msg.sender ].sub( _amount );
         totalDebt = totalDebt.sub( _amount );
 

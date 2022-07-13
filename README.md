@@ -1,15 +1,20 @@
-# Basic Sample Hardhat Project
+# Harmony testnet
+dai 0x7565345f21d7A86a597c4a3Bd0cd18b501db152C
+token 0xF03AEF1b6e62939aEA9eE811f4e00dF6bB1Ba8a5
+treasure 0xf2fF6CED74e7B8d2Ae3Ee5EFCF719D9925c15122
+bond 0x07D999C8F043cAD218587fc9f44Ee3d0c9Cb1791
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, a sample script that deploys that contract, and an example of a task implementation, which simply lists the available accounts.
+// 000000000000000000000000f03aef1b6e62939aea9ee811f4e00df6bb1ba8a50000000000000000000000007565345f21d7a86a597c4a3bd0cd18b501db152c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000033b2e3c9fd0803ce8000000
 
-Try running some of the following tasks:
+# BSC testnet
+dai 0x310175d89EB10F6dE9FDC0D4F30fFA138B40cB87
+token 0xd261fD56B5564245930b2E35521b436232B39529
+treasure 0x9111664C1DEf115A73DbcbF4c05f6DFefdee57C9
+bond 0x8747cA5A246438A5b3a9c6962A7C6a3A500b9039
 
-```shell
-npx hardhat accounts
-npx hardhat compile
-npx hardhat clean
-npx hardhat test
-npx hardhat node
-node scripts/sample-script.js
-npx hardhat help
-```
+# new harmony testnet 
+
+dai 0x33Be57134FAE582C44b5284b6eb5d745277cC9Cb
+token 0xADF4b866Cb540875b6EAaD7437Fc51ba2fc72A41
+treasure 0xFbFFdCB6aAB5a595Ab055E9a0Ec6063228C2c805
+bond 0xfE3B5142e95608489C815c63b9AEd4B6a89Cf688

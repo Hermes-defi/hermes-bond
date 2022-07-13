@@ -1,7 +1,7 @@
 require('dotenv').config();
 const HDWalletProvider = require("@truffle/hdwallet-provider");
 const fs = require('fs');
-const PRIVATE_KEY = fs.readFileSync(".secret").toString().trim();
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
 module.exports = {
   networks: {
@@ -80,6 +80,34 @@ module.exports = {
             addressIndex: 0
           }),
       network_id: 56,
+      networkCheckTimeout: 1000000,
+      confirmations: 3,
+      timeoutBlocks: 50000,
+      websocket: true,
+      skipDryRun: true
+    },
+    one_testnet: {
+      provider: () => new HDWalletProvider(
+          {
+            privateKeys: [PRIVATE_KEY],
+            providerOrUrl: `https://api.s0.b.hmny.io`,
+            addressIndex: 0
+          }),
+      network_id: 1666700000,
+      networkCheckTimeout: 1000000,
+      confirmations: 3,
+      timeoutBlocks: 50000,
+      websocket: true,
+      skipDryRun: true
+    },
+    one_mainnet: {
+      provider: () => new HDWalletProvider(
+          {
+            privateKeys: [PRIVATE_KEY],
+            providerOrUrl: `https://rpc.hermesdefi.io/`,
+            addressIndex: 0
+          }),
+      network_id: 1666600000,
       networkCheckTimeout: 1000000,
       confirmations: 3,
       timeoutBlocks: 50000,

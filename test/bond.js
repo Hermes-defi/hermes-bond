@@ -5,110 +5,137 @@ const {expect} = require('chai');
 
 const chalk = require('chalk');
 
-function toWei(v){
-  return web3.utils.toWei(v);
+function toWei(v) {
+    return web3.utils.toWei(v);
 }
-function fromWei(v){
-  return web3.utils.fromWei(v);
+
+function fromWei(v) {
+    return web3.utils.fromWei(v);
 }
+
 const yellow = function () {
-  console.log(chalk.yellowBright(...arguments))
+    console.log(chalk.yellowBright(...arguments))
 }
 const magenta = function () {
-  console.log(chalk.magenta(...arguments))
+    console.log(chalk.magenta(...arguments))
 }
 const cyan = function () {
-  console.log(chalk.cyan(...arguments))
+    console.log(chalk.cyan(...arguments))
 }
 const red = function () {
-  console.log(chalk.red(...arguments))
+    console.log(chalk.red(...arguments))
 }
 const blue = function () {
-  console.log(chalk.blue(...arguments))
+    console.log(chalk.blue(...arguments))
 }
 const green = function () {
-  console.log(chalk.green(...arguments))
+    console.log(chalk.green(...arguments))
 }
 let dev, user;
 
-const DAI =  contract.fromArtifact("DAI");
-const ERC20Token =  contract.fromArtifact("ERC20Token");
-const HermesTreasury =  contract.fromArtifact("HermesTreasury");
-const HermesBondDepository =  contract.fromArtifact("HermesBondDepository");
+const DAI = contract.fromArtifact("DAI");
+const ERC20Token = contract.fromArtifact("ERC20Token");
+const HermesTreasury = contract.fromArtifact("HermesTreasury");
+const HermesBondDepository = contract.fromArtifact("HermesBondDepository");
 const ZERO = '0x0000000000000000000000000000000000000000';
 
 let dai, token, treasure, bond;
 describe("Main", function () {
-  beforeEach(async function () {
-    this.timeout(140000);
-    dev = accounts[0];
-    user = accounts[1];
+    beforeEach(async function () {
+        this.timeout(140000);
+        dev = accounts[0];
+        user = accounts[1];
 
-  });
-  describe('HermesBondDepository', function () {
-    it('deposit & claim', async function () {
-      this.timeout(140000);
-      dai = await DAI.new("1", {from: dev});
-      await dai.mint(dev, toWei('100100'));
-      await dai.mint(user, toWei('200'));
+    });
+    describe('HermesBondDepository', function () {
+        it('deposit & claim', async function () {
+            this.timeout(140000);
+            dai = await DAI.new("1", {from: dev});
+            await dai.mint(dev, toWei('100100'));
+            await dai.mint(user, toWei('200'));
 
-      token = await ERC20Token.new({from: dev});
+            token = await ERC20Token.new({from: dev});
 
-      const blocksNeededForQueue = 0; // timelock
-      const hourlyLimitAmounts = '1000000000000000000000000000';
-      treasure = await HermesTreasury.new(
-          token.address,
-          dai.address,
-          blocksNeededForQueue,
-          hourlyLimitAmounts, {from: dev});
+            const blocksNeededForQueue = 0; // timelock
+            const hourlyLimitAmounts = '1000000000000000000000000000';
+            treasure = await HermesTreasury.new(
+                token.address,
+                dai.address,
+                blocksNeededForQueue,
+                hourlyLimitAmounts, {from: dev});
 
-      await treasure.queue('0', dev, {from: dev});
-      await treasure.toggle('0', dev, ZERO, {from: dev});
+            await treasure.queue('0', dev, {from: dev});
+            await treasure.toggle('0', dev, ZERO, {from: dev});
 
-      await treasure.queue('4', dev, {from: dev});
-      await treasure.toggle('4', dev, ZERO, {from: dev});
+            await treasure.queue('4', dev, {from: dev});
+            await treasure.toggle('4', dev, ZERO, {from: dev});
 
-      bond = await HermesBondDepository.new(
-          token.address,
-          dai.address,
-          treasure.address,
-          treasure.address, ZERO, {from: dev});
+            bond = await HermesBondDepository.new(
+                token.address,
+                dai.address,
+                treasure.address,
+                treasure.address, ZERO, {from: dev});
 
-      await treasure.queue('0', bond.address, {from: dev});
-      await treasure.toggle('0', bond.address, ZERO, {from: dev});
+            await treasure.queue('0', bond.address, {from: dev});
+            await treasure.toggle('0', bond.address, ZERO, {from: dev});
 
-      await token.setVault(treasure.address, true, {from: dev});
+            await token.setVault(treasure.address, true, {from: dev});
 
-      const vestingTerm = '216000'; // 2.5h
-      const minimumPrice = '2500';
-      const maxPayout = '1000'; // 0.25%
-      const controlVariable = '40',
-          fee = '10000',
-          maxDebt = '1000000000000000', initialDebt = '0';
+            const vestingTerm = '216000'; // 2.5h
+            const minimumPrice = '2500';
+            const maxPayout = '1000'; // 0.25%
+            const controlVariable = '40',
+                fee = '10000',
+                maxDebt = '1000000000000000', initialDebt = '0';
 
-      await bond.initializeBondTerms(
-          controlVariable,
-          minimumPrice,
-          maxPayout,
-          fee,
-          maxDebt,
-          vestingTerm, {from: dev});
+            await bond.initializeBondTerms(
+                controlVariable,
+                minimumPrice,
+                maxPayout,
+                fee,
+                maxDebt,
+                vestingTerm, {from: dev});
 
 
-      const depoistReserve = toWei('100000');
-      const depoistBond = toWei('100');
+            const depoistReserve = toWei('100000');
+            const depoistBond = toWei('10');
 
-      const isReserveToken = await treasure.isReserveToken(dai.address);
-      console.log('isReserveToken', isReserveToken)
-      const isReserveDepositor = await treasure.isReserveDepositor(dev);
-      console.log('isReserveDepositor', isReserveDepositor)
+            const isReserveToken = await treasure.isReserveToken(dai.address);
+            console.log('isReserveToken', isReserveToken)
+            const isReserveDepositor = await treasure.isReserveDepositor(dev);
+            console.log('isReserveDepositor', isReserveDepositor)
 
-      await dai.approve(treasure.address, depoistReserve, {from: dev});
-      await treasure.deposit(depoistReserve, dai.address, '0', {from: dev});
+            await dai.approve(treasure.address, depoistReserve, {from: dev});
+            await treasure.deposit(depoistReserve, dai.address, '0', {from: dev});
 
-      await dai.approve(bond.address, depoistBond, {from: dev});
-      await bond.deposit(depoistBond, minimumPrice, dev, {from: dev});
+            const devBalance = (await token.balanceOf(dev));
+            console.log('devBalance', devBalance.toString());
+            await token.burn('99900000000000', {from: dev});
 
-    })
-  });
+            await dump(bond);
+            await dai.approve(bond.address, depoistBond, {from: dev});
+            await bond.deposit(depoistBond, minimumPrice, dev, {from: dev});
+            await dump(bond);
+            await dai.approve(bond.address, depoistBond, {from: dev});
+            await bond.deposit(depoistBond, minimumPrice, dev, {from: dev});
+            await dump(bond);
+            await dai.approve(bond.address, depoistBond, {from: dev});
+            await bond.deposit(depoistBond, minimumPrice, dev, {from: dev});
+            await dump(bond);
+            await dai.approve(bond.address, depoistBond, {from: dev});
+            await bond.deposit(depoistBond, minimumPrice, dev, {from: dev});
+            await dump(bond);
+
+        })
+    });
 });
+
+async function dump(bond) {
+    const mP = (await bond.maxPayout()).toString();
+    const bondPrice = (await bond.bondPrice()).toString();
+    const dR = (await bond.debtRatio()).toString();
+    const sDR = (await bond.standardizedDebtRatio()).toString();
+    const cd = (await bond.currentDebt()).toString();
+    const price = fromWei((await bond.bondPriceInUSD()).toString());
+    console.log('sDR', sDR, 'cd', cd, '$', price, 'dR', dR, 'P', bondPrice, 'mP', mP);
+}
